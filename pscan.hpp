@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <fmt/os.h>
 #include <fmt/ranges.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -13,8 +14,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <execution>
 #include <iostream>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -30,17 +33,14 @@ using std::thread;
 using std::vector;
 
 #define PORT_MAX_T USHRT_MAX
-#define run(func)                 \
-    for (int i = 0; i < 5; i++) { \
-        func;                     \
-    }                             \
-    pt::print_port();
 
 namespace port_scanner {
 using port_t = unsigned short;
 static vector<port_t> open_ports;
 static mutex vec_mtx;
-static const std::unordered_map<port_t, std::string> services{
+static std::string ip = "127.0.0.1";
+static std::unordered_map<port_t, std::string> m_services{};
+static std::unordered_map<port_t, std::string> services{
     {443, "HTTPS"}, {3306, "MYSQL"}, {25, "SMTP"}, {23, "TELNET"},
     {20, "FTP"},    {21, "FTP"},     {80, "HTTP"}, {9050, "TORSOCK"},
     {22, "SSH"},    {8080, "HTTP"}};
@@ -76,30 +76,38 @@ inline void print_port() {
 
 inline void scan(port_t start, port_t end) {
     int sockfd;
-    struct sockaddr_in tower;
+    struct sockaddr_in soc;
 
-    if (inet_pton(AF_INET, "127.0.0.1", &tower.sin_addr) < 1) {
+    memset(&soc, 0, sizeof(soc));
+
+    soc.sin_family = AF_INET;
+    if (inet_pton(AF_INET, ip.c_str(), &soc.sin_addr) < 1) {
         print(stderr, "problem loading ip adddress\n");
         exit(1);
     }
 
-    memset(&tower, 0, sizeof(tower));
-    tower.sin_family = AF_INET;
-    tower.sin_addr.s_addr = inet_addr("127.0.0.1");
-
     for (port_t i = start; i < end; i++) {
-        tower.sin_port = htons(i);
-        if ((sockfd = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+        soc.sin_port = htons(i);
+        if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
             print(stderr, "failed to create socket for on port {}\n", i);
             close(sockfd);
             i--;
             continue;
         }
 
-        if (connect(sockfd, (struct sockaddr *)&tower, sizeof(tower)) == 0) {
-            lock_guard<mutex> lock(vec_mtx);
+        // if connected check which service
+        if (connect(sockfd, (struct sockaddr *)&soc, sizeof(soc)) == 0) {
+            lock_guard<mutex> guard(vec_mtx);
             open_ports.push_back(i);
+
+            // char *server_reply = new char[200];
+            // int reply = recv(sockfd, server_reply, 199, 0);
+            // if (reply > 0) {
+            //     if (m_services.find(i) == m_services.end())
+            //         m_services.insert({i, server_reply});
+            // }
         }
+
         close(sockfd);
     }
 }
@@ -119,7 +127,7 @@ inline void thread_handler(port_t start, port_t end) {
     for (port_t i = 0; i < max_threads; i++) {
         thread_list[i].join();
     }
-    sort(open_ports.begin(), open_ports.end());
+    sort(std::execution::par, open_ports.begin(), open_ports.end());
 }
 
 }  // namespace port_scanner

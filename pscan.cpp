@@ -1,4 +1,5 @@
 #include "pscan.hpp"
+
 namespace pt = ::port_scanner;
 
 int main(int argc, char **argv) {
@@ -8,38 +9,42 @@ int main(int argc, char **argv) {
     }
 
     int c, start, end;
+    char *ip_addr;
 
-    while ((c = getopt(argc, argv, "supah")) != 1) {
+    while ((c = getopt(argc, argv, "i:supah")) != -1) {
         switch (c) {
             case 's':
                 start = 0;
                 end = 1023;
-                run(pt::thread_handler(start, end));
                 break;
             case 'u':
                 start = 1024;
                 end = 49151;
-                run(pt::thread_handler(start, end));
                 break;
             case 'p':
                 start = 49151;
                 end = PORT_MAX_T;
-                run(pt::thread_handler(start, end));
                 break;
             case 'a':
                 start = 0;
                 end = PORT_MAX_T;
-                run(pt::thread_handler(start, end));
                 break;
             case 'h':
                 pt::help();
                 break;
+            case 'i':
+                ip_addr = optarg;
+                break;
             default:
                 break;
         }
-
-        // for(int i = 0; i < 5; i++){
-        //   p::thread_handler(start,end);
-        // }
     }
+    print("arg for i is {}", ip_addr == NULL ? "" : "");
+
+    pt::thread_handler(start, end);
+    for (const auto &[key, pair] : pt::m_services) {
+        print("{} : {}\n", key, pair);
+    }
+
+    pt::print_port();
 }

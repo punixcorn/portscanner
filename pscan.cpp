@@ -1,5 +1,7 @@
 #include "pscan.hpp"
 
+#include <arpa/inet.h>
+
 namespace pt = ::port_scanner;
 
 int main(int argc, char **argv) {
@@ -9,7 +11,7 @@ int main(int argc, char **argv) {
     }
 
     int c, start, end;
-    char *ip_addr;
+    static char *ip_addr = NULL;
 
     while ((c = getopt(argc, argv, "i:supah")) != -1) {
         switch (c) {
@@ -39,12 +41,18 @@ int main(int argc, char **argv) {
                 break;
         }
     }
-    print("arg for i is {}", ip_addr == NULL ? "" : "");
 
-    pt::thread_handler(start, end);
-    for (const auto &[key, pair] : pt::m_services) {
-        print("{} : {}\n", key, pair);
+    if (ip_addr != NULL) {
+        if (inet_aton(ip_addr, NULL) == 0) {
+            print("invalid ip address passed\n");
+            exit(1);
+        }
+        pt::ip = ip_addr;
     }
+
+    // 2 x for a good charm
+    pt::thread_handler(start, end);
+    pt::thread_handler(start, end);
 
     pt::print_port();
 }
